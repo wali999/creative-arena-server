@@ -47,6 +47,18 @@ async function run() {
             res.send(result);
         })
 
+        //contests created by Specific Creator
+        app.get('/contests-by-creator', async (req, res) => {
+            const email = req.query.email;
+
+            if (!email) {
+                return res.status(400).send({ error: "Email is required" });
+            }
+
+            const result = await contestsCollection.find({ createdBy: email }).toArray();
+            res.send(result);
+        });
+
 
 
 
