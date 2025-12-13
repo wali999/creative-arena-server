@@ -66,6 +66,12 @@ async function run() {
 
 
         //User related api
+        app.get('/users', async (req, res) => {
+            const cursor = usersCollection.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+
         app.post('/users', async (req, res) => {
             const user = req.body;
             user.role = 'user';
@@ -80,6 +86,38 @@ async function run() {
             const result = await usersCollection.insertOne(user);
             res.send(result);
         })
+
+
+        // update user role 
+        app.patch('/users/:id/role', async (req, res) => {
+            const { role } = req.body;
+            const id = req.params.id;
+
+            //validation
+            if (!['user', 'creator', 'admin'].includes(role)) {
+                return res.status(400).send({ message: 'Invalid role' });
+            }
+
+            const targetUser = await usersCollection.findOne({
+                _id: new ObjectId(id)
+            });
+
+            // prevent admin from changing own role
+            if (targetUser.email === req.decoded_email) {
+                return res.status(403).send({
+                    message: 'You cannot change your own role'
+                });
+            }
+
+            const result = await usersCollection.updateOne(
+                { _id: new ObjectId(id) },
+                { $set: { role } }
+            );
+
+            res.send(result);
+        });
+
+
 
 
         //contests related api
