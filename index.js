@@ -121,11 +121,6 @@ async function run() {
 
 
         //contests related api
-        app.get('/contests', async (req, res) => {
-
-        })
-
-
         app.post('/contests', async (req, res) => {
             const contest = req.body;
             contest.status = "pending";
@@ -134,6 +129,15 @@ async function run() {
             const result = await contestsCollection.insertOne(contest);
             res.send(result);
         })
+
+
+        //get all contests
+        app.get('/contests', async (req, res) => {
+            const result = await contestsCollection.find().toArray();
+            res.send(result);
+        })
+
+
 
         //contests created by Specific Creator
         app.get('/contests-by-creator', async (req, res) => {
@@ -162,6 +166,24 @@ async function run() {
             const result = await contestsCollection.updateOne(
                 { _id: new ObjectId(id) },
                 { $set: updated }
+            );
+
+            res.send(result);
+        });
+
+
+        // update contest status
+        app.patch('/contests/:id/status', async (req, res) => {
+            const id = req.params.id;
+            const { status } = req.body;
+
+            if (!['approved', 'rejected'].includes(status)) {
+                return res.status(400).send({ message: 'Invalid status' });
+            }
+
+            const result = await contestsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                { $set: { status } }
             );
 
             res.send(result);
