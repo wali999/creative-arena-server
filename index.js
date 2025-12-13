@@ -138,6 +138,16 @@ async function run() {
         })
 
 
+        // All approved contests
+        app.get('/all-contests', async (req, res) => {
+            const result = await contestsCollection
+                .find({ status: 'approved' })
+                .toArray();
+
+            res.send(result);
+        });
+
+
 
         //contests created by Specific Creator
         app.get('/contests-by-creator', async (req, res) => {
