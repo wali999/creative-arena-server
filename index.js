@@ -2,7 +2,7 @@ const express = require('express')
 const cors = require('cors');
 const app = express();
 require('dotenv').config();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000
 
 //middleware
@@ -56,6 +56,26 @@ async function run() {
             }
 
             const result = await contestsCollection.find({ createdBy: email }).toArray();
+            res.send(result);
+        });
+
+        //get contest by id for edit contests
+        app.get('/contests/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await contestsCollection.findOne({ _id: new ObjectId(id) });
+            res.send(result);
+        });
+
+        //Update Contests by creator
+        app.patch('/contests/:id', async (req, res) => {
+            const id = req.params.id;
+            const updated = req.body;
+
+            const result = await contestsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                { $set: updated }
+            );
+
             res.send(result);
         });
 
