@@ -61,10 +61,28 @@ async function run() {
         await client.connect();
 
         const db = client.db('creative_arena_db');
+        const usersCollection = db.collection('users');
         const contestsCollection = db.collection('contests');
 
 
-        //contests api
+        //User related api
+        app.post('/users', async (req, res) => {
+            const user = req.body;
+            user.role = 'user';
+            user.createdAt = new Date();
+            const email = user.email;
+
+            const userExists = await usersCollection.findOne({ email })
+            if (userExists) {
+                return res.send({ message: 'user exists' })
+            }
+
+            const result = await usersCollection.insertOne(user);
+            res.send(result);
+        })
+
+
+        //contests related api
         app.get('/contests', async (req, res) => {
 
         })
