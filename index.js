@@ -5,9 +5,41 @@ require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000
 
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./creative-arena-firebase-adminsdk.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
+
 //middleware
 app.use(express.json());
 app.use(cors());
+
+
+const verifyFBToken = async (req, res, next) => {
+    const token = req.headers.authorization;
+
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+
+    try {
+        const idToken = token.split(' ')[1];
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        console.log('decoded in the token', decoded);
+        req.decoded_email = decoded.email;
+
+        next();
+
+    }
+    catch (err) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+
+}
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.e8hxcyy.mongodb.net/?appName=Cluster0`;
