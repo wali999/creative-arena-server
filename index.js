@@ -67,6 +67,8 @@ async function run() {
         const usersCollection = db.collection('users');
         const contestsCollection = db.collection('contests');
         const paymentsCollection = db.collection('payments');
+        const submissionCollection = db.collection('submissions');
+
 
 
         //middleware admin before allowing admin activity
@@ -331,6 +333,87 @@ async function run() {
         });
 
 
+
+        //Participation api
+        app.get('/my-participated', verifyFBToken, async (req, res) => {
+            const email = req.query.email;
+
+            if (!email) {
+                return res.status(400).send({ message: 'Email required' });
+            }
+
+            //  get paid payments
+            const payments = await paymentsCollection.find({
+                email,
+                status: 'paid'
+            }).toArray();
+
+            const contestIds = payments.map(p => new ObjectId(p.contestId));
+
+            // get contests
+            const contests = await contestsCollection.find({
+                _id: { $in: contestIds }
+            }).toArray();
+
+            // merge payment info
+            const result = contests.map(contest => {
+                const payment = payments.find(
+                    p => p.contestId === contest._id.toString()
+                );
+
+                return {
+                    ...contest,
+                    paymentStatus: payment?.status,
+                    paidAt: payment?.paidAt
+                };
+            });
+
+            res.send(result);
+        });
+
+
+
+        //Submissions api
+        app.post('/submissions', verifyFBToken, async (req, res) => {
+            const submission = req.body;
+            const email = req.decoded_email;
+
+            //Check payment
+            const paid = await paymentsCollection.findOne({
+                contestId: submission.contestId,
+                email,
+                status: 'paid'
+            });
+
+            if (!paid) {
+                return res.status(403).send({ message: 'Payment required' });
+            }
+
+            //Prevent duplicate submission
+            const exists = await submissionCollection.findOne({
+                contestId: submission.contestId,
+                'participant.email': email
+            });
+
+            if (exists) {
+                return res.status(409).send({ message: 'Already submitted' });
+            }
+
+            //Save submission
+            const doc = {
+                contestId: new ObjectId(submission.contestId),
+                contestName: submission.contestName,
+                participant: submission.participant,
+                submissionText: submission.submissionText,
+                submissionLink: submission.submissionLink,
+                status: 'submitted',
+                isWinner: false,
+                submittedAt: new Date()
+            };
+
+            const result = await submissionCollection.insertOne(doc);
+            res.send(result);
+        });
 
 
 
