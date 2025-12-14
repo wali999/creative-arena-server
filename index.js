@@ -5,6 +5,9 @@ require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000
 
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
 const admin = require("firebase-admin");
 
 const serviceAccount = require("./creative-arena-firebase-adminsdk.json");
@@ -63,6 +66,36 @@ async function run() {
         const db = client.db('creative_arena_db');
         const usersCollection = db.collection('users');
         const contestsCollection = db.collection('contests');
+        const paymentsCollection = db.collection('payments');
+
+
+        //middleware admin before allowing admin activity
+        //must be used after verifyFBToken middleware
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded_email;
+            const query = { email };
+            const user = await usersCollection.findOne(query);
+
+            if (!user || user.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+
+            next();
+        }
+
+        //verify creator
+        const verifyCreator = async (req, res, next) => {
+            const email = req.decoded_email;
+            const query = { email };
+            const user = await usersCollection.findOne(query);
+
+            if (!user || user.role !== 'creator') {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+
+            next();
+        }
+
 
 
         //User related api
@@ -221,6 +254,80 @@ async function run() {
 
             const result = await contestsCollection.deleteOne(query);
             res.send(result);
+        });
+
+
+
+
+
+        //Payment related api
+        app.post('/create-checkout-session', verifyFBToken, async (req, res) => {
+            const { contestId, contestName, price } = req.body;
+            const amount = parseInt(price) * 100;
+
+            const email = req.decoded_email;
+
+            const session = await stripe.checkout.sessions.create({
+                payment_method_types: ['card'],
+                mode: 'payment',
+                user_email: email,
+                line_items: [
+                    {
+                        price_data: {
+                            currency: 'usd',
+                            unit_amount: amount,
+                            product_data: {
+                                name: `Please pay for: ${contestName}`,
+                            },
+                        },
+                        quantity: 1,
+                    },
+                ],
+                success_url: `${process.env.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${process.env.CLIENT_URL}/contest/${contestId}`,
+                metadata: {
+                    contestId,
+                    email,
+                },
+            });
+
+            res.send({ url: session.url });
+        });
+
+
+        //Save payment
+        app.patch('/payment-success', async (req, res) => {
+            const sessionId = req.query.session_id;
+
+            const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+            const paymentInfo = {
+                contestId: session.metadata.contestId,
+                email: session.user_email,
+                amount: session.amount_total / 100,
+                transactionId: session.payment_intent,
+                paidAt: new Date(),
+                status: 'paid',
+            };
+
+            // prevent duplicate payment
+            const exists = await paymentsCollection.findOne({
+                transactionId: paymentInfo.transactionId,
+            });
+
+            if (exists) {
+                return res.send({ message: 'Payment already recorded' });
+            }
+
+            await paymentsCollection.insertOne(paymentInfo);
+
+            //  store participant in DB
+            await contestsCollection.updateOne(
+                { _id: new ObjectId(paymentInfo.contestId) },
+                { $addToSet: { participants: paymentInfo.email } }
+            );
+
+            res.send({ success: true });
         });
 
 
