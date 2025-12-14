@@ -374,6 +374,23 @@ async function run() {
 
 
         //Submissions api
+        // Get submissions for  contest details page
+        app.get('/submissions', verifyFBToken, async (req, res) => {
+            const { contestId } = req.query;
+
+            if (!contestId) {
+                return res.status(400).send({ message: 'contestId required' });
+            }
+
+            const submissions = await submissionCollection
+                .find({ contestId: new ObjectId(contestId) })
+                .toArray();
+
+            res.send(submissions);
+        });
+
+
+
         app.post('/submissions', verifyFBToken, async (req, res) => {
             const submission = req.body;
             const email = req.decoded_email;
@@ -412,6 +429,45 @@ async function run() {
             };
 
             const result = await submissionCollection.insertOne(doc);
+            res.send(result);
+        });
+
+
+
+        app.get('/creator/submissions', verifyFBToken, verifyCreator, async (req, res) => {
+            const creatorEmail = req.decoded_email;
+
+            const contests = await contestsCollection.find({
+                createdBy: creatorEmail
+            }).toArray();
+
+            const contestIds = contests.map(c => c._id);
+
+            const submissions = await submissionCollection.find({
+                contestId: { $in: contestIds }
+            }).toArray();
+
+            res.send(submissions);
+        });
+
+
+        //Declare winner
+        app.patch('/creator/declare-winner/:submissionId', verifyFBToken, verifyCreator, async (req, res) => {
+            const { contestId } = req.body;
+            const submissionId = req.params.submissionId;
+
+            // Reset previous winner
+            await submissionCollection.updateMany(
+                { contestId: new ObjectId(contestId) },
+                { $set: { isWinner: false, status: 'rejected' } }
+            );
+
+            //Set new winner
+            const result = await submissionCollection.updateOne(
+                { _id: new ObjectId(submissionId) },
+                { $set: { isWinner: true, status: 'winner' } }
+            );
+
             res.send(result);
         });
 
