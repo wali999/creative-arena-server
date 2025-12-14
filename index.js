@@ -131,11 +131,25 @@ async function run() {
         })
 
 
-        //get all contests
+        //get all contests and pagination
         app.get('/contests', async (req, res) => {
-            const result = await contestsCollection.find().toArray();
-            res.send(result);
-        })
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const skip = (page - 1) * limit;
+
+            const contests = await contestsCollection
+                .find()
+                .skip(skip)
+                .limit(limit)
+                .toArray();
+
+            const total = await contestsCollection.countDocuments();
+
+            res.send({
+                contests,
+                total
+            });
+        });
 
 
         // All approved contests
@@ -196,6 +210,16 @@ async function run() {
                 { $set: { status } }
             );
 
+            res.send(result);
+        });
+
+
+        //delete contest
+        app.delete('/contests/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+
+            const result = await contestsCollection.deleteOne(query);
             res.send(result);
         });
 
