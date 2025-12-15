@@ -272,7 +272,7 @@ async function run() {
             const session = await stripe.checkout.sessions.create({
                 payment_method_types: ['card'],
                 mode: 'payment',
-                user_email: email,
+                customer_email: email,
                 line_items: [
                     {
                         price_data: {
@@ -305,7 +305,7 @@ async function run() {
 
             const paymentInfo = {
                 contestId: session.metadata.contestId,
-                email: session.user_email,
+                email: session.customer_email,
                 amount: session.amount_total / 100,
                 transactionId: session.payment_intent,
                 paidAt: new Date(),
@@ -467,6 +467,33 @@ async function run() {
                 { _id: new ObjectId(submissionId) },
                 { $set: { isWinner: true, status: 'winner' } }
             );
+
+            res.send(result);
+        });
+
+
+
+        // My winning contests api
+        app.get('/my-winning-contests', verifyFBToken, async (req, res) => {
+            const email = req.decoded_email;
+
+            const result = await submissionCollection.aggregate([
+                {
+                    $match: {
+                        'participant.email': email,
+                        isWinner: true
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'contests',
+                        localField: 'contestId',
+                        foreignField: '_id',
+                        as: 'contest'
+                    }
+                },
+                { $unwind: '$contest' }
+            ]).toArray();
 
             res.send(result);
         });
