@@ -160,6 +160,7 @@ async function run() {
             const contest = req.body;
             contest.status = "pending";
             contest.createdAt = new Date();
+            contest.participants = [];
 
             const result = await contestsCollection.insertOne(contest);
             res.send(result);
@@ -556,6 +557,26 @@ async function run() {
             });
         });
 
+
+        //popular contests api
+        app.get('/popular-contests', async (req, res) => {
+            const result = await contestsCollection.aggregate([
+                { $match: { status: 'approved' } },
+                {
+                    $addFields: {
+                        participantsCount: {
+                            $size: {
+                                $ifNull: ['$participants', []]  // <-- default to empty array
+                            }
+                        }
+                    }
+                },
+                { $sort: { participantsCount: -1 } },
+                { $limit: 6 }
+            ]).toArray();
+
+            res.send(result);
+        });
 
 
         // Send a ping to confirm a successful connection
