@@ -635,6 +635,48 @@ async function run() {
         });
 
 
+        // Recent Winners for WinnerAd in Homepage
+        app.get('/winners/recent', async (req, res) => {
+            const winners = await submissionCollection.aggregate([
+                {
+                    $match: { isWinner: true }
+                },
+                {
+                    $sort: { submittedAt: -1 }
+                },
+                {
+                    $limit: 3
+                },
+                {
+                    $lookup: {
+                        from: "contests",
+                        localField: "contestId",
+                        foreignField: "_id",
+                        as: "contest"
+                    }
+                },
+                { $unwind: "$contest" },
+                {
+                    $project: {
+                        _id: 1,
+                        participant: 1,
+                        contestName: 1,
+                        prizeMoney: "$contest.prizeMoney",
+                        contestImage: "$contest.image",
+                        submittedAt: 1
+                    }
+                }
+            ]).toArray();
+
+            const totalWinners = await submissionCollection.countDocuments({
+                isWinner: true
+            });
+
+            res.send({ winners, totalWinners });
+        });
+
+
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
