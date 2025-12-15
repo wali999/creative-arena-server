@@ -566,7 +566,7 @@ async function run() {
                     $addFields: {
                         participantsCount: {
                             $size: {
-                                $ifNull: ['$participants', []]  // <-- default to empty array
+                                $ifNull: ['$participants', []]
                             }
                         }
                     }
@@ -574,6 +574,20 @@ async function run() {
                 { $sort: { participantsCount: -1 } },
                 { $limit: 6 }
             ]).toArray();
+
+            res.send(result);
+        });
+
+
+        //Banner search api in home
+        app.get('/search-contests', async (req, res) => {
+            const { type } = req.query;
+            if (!type) return res.status(400).send({ message: 'Type is required' });
+
+            const result = await contestsCollection.find({
+                contestType: { $regex: type, $options: 'i' },
+                status: 'approved'
+            }).toArray();
 
             res.send(result);
         });
