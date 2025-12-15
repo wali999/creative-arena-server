@@ -593,6 +593,49 @@ async function run() {
         });
 
 
+        // Leaderboard api
+        app.get('/leaderboard', async (req, res) => {
+            const leaderboard = await submissionCollection.aggregate([
+                {
+                    $match: { isWinner: true }
+                },
+                {
+                    $group: {
+                        _id: "$participant.email",
+                        totalWins: { $sum: 1 }
+                    }
+                },
+                {
+                    $sort: { totalWins: -1 }
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "_id",
+                        foreignField: "email",
+                        as: "user"
+                    }
+                },
+                {
+                    $unwind: "$user"
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        email: "$_id",
+                        totalWins: 1,
+                        displayName: "$user.displayName",
+                        photoURL: "$user.photoURL",
+                        role: "$user.role"
+                    }
+                }
+            ]).toArray();
+
+            res.send(leaderboard);
+        });
+
+
+
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
