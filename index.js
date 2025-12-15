@@ -500,6 +500,62 @@ async function run() {
 
 
 
+        //My Profile api
+        // Update profile
+        app.patch('/users/profile', verifyFBToken, async (req, res) => {
+            const email = req.decoded_email;
+            const { displayName, photoURL, bio } = req.body;
+
+            const result = await usersCollection.updateOne(
+                { email },
+                {
+                    $set: {
+                        displayName,
+                        photoURL,
+                        bio
+                    }
+                }
+            );
+
+            res.send(result);
+        });
+
+
+
+        // get user's profile
+        app.get('/users/me', verifyFBToken, async (req, res) => {
+            const email = req.decoded_email;
+
+            const user = await usersCollection.findOne({ email });
+            res.send(user);
+        });
+
+
+
+        //Win Statistics
+        app.get('/users/win-stats', verifyFBToken, async (req, res) => {
+            const email = req.decoded_email;
+
+            const participated = await submissionCollection.countDocuments({
+                'participant.email': email
+            });
+
+            const won = await submissionCollection.countDocuments({
+                'participant.email': email,
+                isWinner: true
+            });
+
+            const winPercentage = participated
+                ? Math.round((won / participated) * 100)
+                : 0;
+
+            res.send({
+                participated,
+                won,
+                winPercentage
+            });
+        });
+
 
 
         // Send a ping to confirm a successful connection
