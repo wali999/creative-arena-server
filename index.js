@@ -101,10 +101,18 @@ async function run() {
 
 
         //User related api
-        app.get('/users', async (req, res) => {
+        app.get('/users', verifyFBToken, verifyAdmin, async (req, res) => {
             const cursor = usersCollection.find();
             const result = await cursor.toArray();
             res.send(result);
+        })
+
+        //User role verify
+        app.get('/users/:email/role', async (req, res) => {
+            const email = req.params.email;
+            const query = { email }
+            const user = await usersCollection.findOne(query);
+            res.send({ role: user?.role || 'user' })
         })
 
         app.post('/users', async (req, res) => {
@@ -124,7 +132,7 @@ async function run() {
 
 
         // update user role 
-        app.patch('/users/:id/role', async (req, res) => {
+        app.patch('/users/:id/role', verifyFBToken, verifyAdmin, async (req, res) => {
             const { role } = req.body;
             const id = req.params.id;
 
@@ -156,7 +164,7 @@ async function run() {
 
 
         //contests related api
-        app.post('/contests', async (req, res) => {
+        app.post('/contests', verifyFBToken, verifyCreator, async (req, res) => {
             const contest = req.body;
             contest.status = "pending";
             contest.createdAt = new Date();
@@ -200,8 +208,8 @@ async function run() {
 
 
         //contests created by Specific Creator
-        app.get('/contests-by-creator', async (req, res) => {
-            const email = req.query.email;
+        app.get('/contests-by-creator', verifyFBToken, async (req, res) => {
+            const email = req.decoded_email;
 
             if (!email) {
                 return res.status(400).send({ error: "Email is required" });
@@ -212,28 +220,40 @@ async function run() {
         });
 
         //get contest by id for edit contests
-        app.get('/contests/:id', async (req, res) => {
+        app.get('/contests/:id', verifyFBToken, async (req, res) => {
             const id = req.params.id;
             const result = await contestsCollection.findOne({ _id: new ObjectId(id) });
             res.send(result);
         });
 
         //Update Contests by creator
-        app.patch('/contests/:id', async (req, res) => {
+        app.patch('/contests/:id', verifyFBToken, verifyCreator, async (req, res) => {
+
             const id = req.params.id;
-            const updated = req.body;
+            const email = req.decoded_email;
+
+            const contest = await contestsCollection.findOne({
+                _id: new ObjectId(id)
+            });
+
+            if (!contest || contest.createdBy !== email) {
+                return res.status(403).send({
+                    message: 'You can only update your own contest'
+                });
+            }
 
             const result = await contestsCollection.updateOne(
                 { _id: new ObjectId(id) },
-                { $set: updated }
+                { $set: req.body }
             );
 
             res.send(result);
-        });
+        }
+        );
 
 
         // update contest status
-        app.patch('/contests/:id/status', async (req, res) => {
+        app.patch('/contests/:id/status', verifyFBToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const { status } = req.body;
 
@@ -251,13 +271,49 @@ async function run() {
 
 
         //delete contest
-        app.delete('/contests/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
+        // delete contest for Admin only
+        app.delete('/admin/contests/:id', verifyFBToken, verifyAdmin, async (req, res) => {
 
-            const result = await contestsCollection.deleteOne(query);
+            const id = req.params.id;
+
+            const result = await contestsCollection.deleteOne({
+                _id: new ObjectId(id)
+            });
+
             res.send(result);
-        });
+        }
+        );
+
+
+        // delete contest method for creator
+        app.delete('/creator/contests/:id', verifyFBToken, verifyCreator, async (req, res) => {
+
+            const id = req.params.id;
+            const email = req.decoded_email;
+
+            const contest = await contestsCollection.findOne({
+                _id: new ObjectId(id)
+            });
+
+            if (!contest || contest.createdBy !== email) {
+                return res.status(403).send({
+                    message: 'You can only delete your own contests'
+                });
+            }
+
+            if (contest.status !== 'pending') {
+                return res.status(403).send({
+                    message: 'Approved contests cannot be deleted'
+                });
+            }
+
+            const result = await contestsCollection.deleteOne({
+                _id: new ObjectId(id)
+            });
+
+            res.send(result);
+        }
+        );
 
 
 
@@ -351,7 +407,6 @@ async function run() {
 
             const contestIds = payments.map(p => new ObjectId(p.contestId));
 
-            // get contests
             const contests = await contestsCollection.find({
                 _id: { $in: contestIds }
             }).toArray();
@@ -369,6 +424,7 @@ async function run() {
                 };
             });
 
+            result.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
             res.send(result);
         });
 
