@@ -1,3 +1,4 @@
 node_modules
 .env
 creative-arena-firebase-adminsdk.json
+.vercel
